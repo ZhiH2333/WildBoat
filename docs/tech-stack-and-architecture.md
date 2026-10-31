@@ -132,19 +132,20 @@ Model game instances even though only one is deployed. This avoids hardcoding an
 
 ## 6. Ticket strategy
 
-Choose one approach and document it before implementation:
+**Phase 2B decision: Option A — online validation** (see `docs/phase-2b-api-contract.md`).
 
-**Option A: online validation**
+**Option A: online validation (chosen)**
 - Ticket is an opaque random secret stored hashed in DB.
-- Dedicated Server calls a server-only validation endpoint.
-- Supports immediate revocation but requires server-to-backend reachability.
+- Dedicated Server calls `POST /v1/server/tickets/validate`.
+- Supports immediate revocation; requires server-to-backend reachability.
+- Fail closed on WildBoat timeout/unreachable; one-time consume; no “valid” cache across reconnects.
 
-**Option B: signed self-contained ticket**
+**Option B: signed self-contained ticket (not chosen for Phase 2B)**
 - Backend signs short-lived claims; Dedicated Server verifies signature with public key.
 - Requires key rotation, audience/issuer checks, expiry, nonce/replay control, and a revocation strategy.
 - Avoid embedding symmetric signing secrets in client builds.
 
-The implementation must bind claims to `player_id`, `match_id`, `game_instance_id`, expiry, and protocol/build constraints. Do not casually invent a JWT design without threat review.
+Tickets bind `player_id`, `match_id`, `game_instance_id`, and expiry. DS restart / re-register revokes unconsumed tickets for that server.
 
 ## 7. Data consistency
 

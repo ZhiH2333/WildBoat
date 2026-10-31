@@ -7,17 +7,27 @@ import (
 	"github.com/ZhiH2333/WildBoat/internal/httpapi/handlers"
 	"github.com/ZhiH2333/WildBoat/internal/httpapi/middleware"
 	"github.com/ZhiH2333/WildBoat/internal/identity"
+	"github.com/ZhiH2333/WildBoat/internal/match"
 )
 
 // NewRouter wires public HTTP routes for the modular monolith API.
-func NewRouter(logger *slog.Logger, health handlers.Health, idSvc *identity.Service, authLimiter *middleware.RateLimiter) http.Handler {
+func NewRouter(
+	logger *slog.Logger,
+	health handlers.Health,
+	idSvc *identity.Service,
+	matchSvc *match.Service,
+	authLimiter *middleware.RateLimiter,
+) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", health.Healthz)
 	mux.HandleFunc("GET /readyz", health.Readyz)
 
 	auth := handlers.Auth{Service: idSvc}
 	me := handlers.Me{Service: idSvc}
+	games := handlers.Games{Service: matchSvc}
+	server := handlers.Server{Service: matchSvc}
 	requireAuth := middleware.RequireAuth(idSvc)
+	requireServer := middleware.RequireServerAuth(matchSvc)
 
 	limit := func(h http.HandlerFunc) http.Handler {
 		if authLimiter == nil {
@@ -39,6 +49,13 @@ func NewRouter(logger *slog.Logger, health handlers.Health, idSvc *identity.Serv
 	mux.Handle("PATCH /v1/me/profile", requireAuth(http.HandlerFunc(me.PatchProfile)))
 	mux.Handle("GET /v1/me/sessions", requireAuth(http.HandlerFunc(me.ListSessions)))
 	mux.Handle("DELETE /v1/me/sessions/{session_id}", requireAuth(http.HandlerFunc(me.DeleteSession)))
+
+	mux.Handle("POST /v1/games/assign", requireAuth(http.HandlerFunc(games.Assign)))
+
+	mux.Handle("POST /v1/server/instances/register", requireServer(http.HandlerFunc(server.RegisterInstance)))
+	mux.Handle("POST /v1/server/instances/{game_instance_id}/heartbeat", requireServer(http.HandlerFunc(server.Heartbeat)))
+	mux.Handle("POST /v1/server/tickets/validate", requireServer(http.HandlerFunc(server.ValidateTicket)))
+	mux.Handle("POST /v1/server/matches/{match_id}/settlement", requireServer(http.HandlerFunc(server.SettleMatch)))
 
 	var handler http.Handler = mux
 	handler = middleware.AccessLog(logger)(handler)

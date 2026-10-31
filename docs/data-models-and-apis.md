@@ -88,37 +88,52 @@ This is the proposed initial API and relational model contract shared with WPG. 
 - `room_id`, `player_id`, `ready`, `joined_at`, `last_seen_at`
 - unique membership constraints and capacity-safe transaction rules
 
+### `dedicated_servers` (Phase 2B)
+- `id` (PK; public `server_id`)
+- `credential_hash` (unique; SHA-256 of opaque server credential)
+- `label`
+- `created_at`, `updated_at`, `revoked_at` nullable
+
 ### `game_instances`
-- `id`, `host`, `port`, `transport`
-- `status`, `protocol_version`, `server_build`
-- `capacity`, `active_match_id` nullable
+- `id` (PK; public `game_instance_id`)
+- `server_id` (FK dedicated_servers)
+- `host`, `port`, `transport`
+- `status` (`starting`, `ready`, `full`, `draining`, `offline`)
+- `protocol_version`, `server_build`
+- `capacity`, `occupied_slots`
+- `active_match_id` nullable
 - `last_heartbeat_at`, `created_at`, `updated_at`
 
 ### `matches`
-- `id`, `room_id`, `game_instance_id`
-- `mode`, `state`, `started_at`, `ended_at`
-- `settlement_id` unique nullable
+- `id` (PK; public `match_id`)
+- `room_id` nullable (unused in Phase 2B; reserved for Phase 4+)
+- `game_instance_id` (FK)
+- `server_id` (FK)
+- `mode`, `state` (`allocating`, `active`, `completed`, `aborted`)
+- `max_players`, `started_at`, `ended_at`
 - `created_at`, `updated_at`
 
 ### `match_players`
-- `match_id`, `player_id`, `team_id` nullable
-- `join_state`, `result_json` or normalized result fields
-- composite primary key
+- `match_id`, `player_id` (composite PK)
+- `team_id` nullable
+- `join_state` (`assigned`, `admitted`, `left`)
+- `kills`, `deaths`, `score` (filled at settlement)
+- `assigned_at`, `admitted_at` nullable
 
 ### `game_tickets`
-For opaque ticket strategy:
-- `id`, `token_hash`, `player_id`, `match_id`, `game_instance_id`
+Opaque online-validation strategy (Phase 2B decision — see `docs/phase-2b-api-contract.md`):
+- `id`, `token_hash` (unique), `player_id`, `match_id`, `game_instance_id`, `server_id`
 - `expires_at`, `consumed_at`, `revoked_at`, `created_at`
 
 ### `match_settlements`
-- `settlement_id` (unique)
-- `match_id`, `game_instance_id`
+- `settlement_id` (unique; DS-provided idempotency key)
+- `match_id` (unique when processed), `game_instance_id`, `server_id`
 - `payload_json` (validated canonical payload)
-- `received_at`, `processed_at`, `status`
+- `result`, `received_at`, `processed_at`, `status`
 
 ### `player_stats`
 - `player_id` (PK)
-- aggregate counters and `updated_at`
+- aggregate counters (`matches_played`, `kills`, `deaths`, `score`) and `updated_at`
 - update only from validated idempotent settlement processing
 
 ### `achievements` / `player_achievements`
@@ -196,7 +211,12 @@ All paths are under `/v1` (for example `POST /v1/auth/register`).
 - `POST /parties/{party_id}/disband`
 - `POST /parties/{party_id}/transfer-leader`
 
-### Room/matchmaking
+### Game assignment (Phase 2B — implemented)
+- `POST /games/assign`
+
+Full request/response examples, ticket rules, and DS auth live in `docs/phase-2b-api-contract.md`.
+
+### Room/matchmaking (Phase 4+ — not implemented)
 - `POST /rooms`
 - `GET /rooms`
 - `GET /rooms/{room_id}`
@@ -217,11 +237,16 @@ All paths are under `/v1` (for example `POST /v1/auth/register`).
 
 ## 5. Server-to-server API
 
-These routes must not accept player access tokens as authorization:
+These routes must not accept player access tokens as authorization.
+Auth: `Authorization: Bearer <dedicated_server_credential>` (SHA-256 hashed at rest).
+
+Phase 2B implemented:
 - `POST /server/instances/register`
-- `POST /server/instances/{instance_id}/heartbeat`
+- `POST /server/instances/{game_instance_id}/heartbeat`
 - `POST /server/tickets/validate`
 - `POST /server/matches/{match_id}/settlement`
+
+Reserved / not implemented yet:
 - `POST /server/matches/{match_id}/abort` (policy-controlled)
 
 ## 6. Example contracts
@@ -310,35 +335,40 @@ Response:
 }
 ```
 
-### Assignment
+### Assignment (Phase 2B)
+Request `POST /v1/games/assign`:
 ```json
 {
-  "match_id": "mat_opaque",
-  "game_instance_id": "gsi_opaque",
-  "endpoint": {
-    "host": "game.example.net",
-    "port": 24567,
-    "transport": "enet_udp"
-  },
+  "mode": "coop_survival"
+}
+```
+Response:
+```json
+{
+  "game_instance_id": "11111111-1111-1111-1111-111111111111",
+  "match_id": "22222222-2222-2222-2222-222222222222",
+  "server_id": "33333333-3333-3333-3333-333333333333",
+  "host": "game.example.net",
+  "port": 24567,
+  "transport": "enet_udp",
   "game_ticket": "<short-lived-secret>",
   "ticket_expires_at": "2026-10-31T04:00:00Z",
   "protocol_version": 1,
-  "server_build": "wpg-server-build"
+  "server_build": "wpg-server-build",
+  "mode": "coop_survival"
 }
 ```
 
-### Settlement
+### Settlement (Phase 2B)
 ```json
 {
-  "settlement_id": "set_opaque_unique",
-  "match_id": "mat_opaque",
-  "mode": "coop_endless",
+  "settlement_id": "44444444-4444-4444-4444-444444444444",
+  "result": "completed",
   "started_at": "2026-10-31T03:40:00Z",
   "ended_at": "2026-10-31T03:55:00Z",
-  "result": "completed",
   "players": [
     {
-      "player_id": "plr_opaque",
+      "player_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
       "team_id": "team_alpha",
       "kills": 15,
       "deaths": 3,
@@ -351,7 +381,7 @@ Response:
   }
 }
 ```
-The server submission must be authenticated. WildBoat validates the game instance, match roster, allowed metrics, timestamp bounds, and idempotency before updating progression.
+The server submission must be authenticated with the dedicated server credential. WildBoat validates instance ownership, match state, roster, and `settlement_id` idempotency before updating `player_stats`.
 
 ## 7. Error format
 
@@ -370,6 +400,7 @@ Suggested codes include:
 - `AUTH_INVALID_CREDENTIALS`
 - `AUTH_SESSION_EXPIRED`
 - `ACCOUNT_NOT_VERIFIED`
+- `SERVER_AUTH_INVALID`
 - `PLAYER_BLOCKED`
 - `PARTY_FULL`
 - `NOT_PARTY_LEADER`
@@ -378,9 +409,13 @@ Suggested codes include:
 - `ROOM_CODE_INVALID`
 - `ROOM_NOT_JOINABLE`
 - `MATCHMAKING_UNAVAILABLE`
+- `GAME_SERVER_UNAVAILABLE`
 - `GAME_CAPACITY_FULL`
+- `TICKET_INVALID`
 - `TICKET_EXPIRED`
 - `TICKET_REPLAYED`
+- `TICKET_REVOKED`
+- `MATCH_NOT_SETTLEABLE`
 - `SETTLEMENT_ALREADY_PROCESSED`
 
 ## 8. Transaction and idempotency rules
@@ -395,10 +430,13 @@ Suggested codes include:
 
 ## 9. Open contract decisions
 
-Resolve before production:
-- UUID format and public ID encoding.
+Resolved in Phase 2 / 2B:
+- UUID format: plain UUID strings (no prefixes).
+- Ticket strategy: opaque + online DS validation (`docs/phase-2b-api-contract.md`).
+- DS auth: shared dedicated server credential, hashed at rest.
+
+Still open / later phases:
 - Email provider and verification delivery.
-- Opaque ticket vs signed ticket.
 - Presence delivery mechanism (polling initially; push later if needed).
 - Room code alphabet and expiry/collision retry.
 - Exact per-mode settlement metrics.

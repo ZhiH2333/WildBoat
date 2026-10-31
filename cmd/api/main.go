@@ -15,6 +15,7 @@ import (
 	"github.com/ZhiH2333/WildBoat/internal/httpapi/middleware"
 	"github.com/ZhiH2333/WildBoat/internal/identity"
 	"github.com/ZhiH2333/WildBoat/internal/logging"
+	"github.com/ZhiH2333/WildBoat/internal/match"
 	"github.com/ZhiH2333/WildBoat/internal/persistence"
 )
 
@@ -66,8 +67,22 @@ func main() {
 		AppEnv:     cfg.AppEnv,
 	}, logger)
 
+	matchStore := match.NewStore(db.Pool)
+	matchSvc := match.NewService(matchStore, match.Config{
+		TicketTTL:        cfg.GameTicketTTL,
+		HeartbeatTTL:     cfg.DSHeartbeatTTL,
+		DefaultCapacity:  cfg.GameInstanceCapacity,
+		ServerCredential: cfg.DedicatedServerCredential,
+		ServerLabel:      "default",
+	}, logger)
+	if err := matchSvc.EnsureBootstrapServer(ctx); err != nil {
+		logger.Error("dedicated_server_bootstrap_failed", "error", err.Error())
+		os.Exit(1)
+	}
+	logger.Info("dedicated_server_credential_ready")
+
 	authLimiter := middleware.NewRateLimiter(cfg.AuthRateLimit, cfg.AuthRateWindow)
-	router := httpapi.NewRouter(logger, handlers.Health{DB: db}, idSvc, authLimiter)
+	router := httpapi.NewRouter(logger, handlers.Health{DB: db}, idSvc, matchSvc, authLimiter)
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           router,

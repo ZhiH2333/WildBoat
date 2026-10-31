@@ -58,26 +58,26 @@ Notes:
 **Exit:** room creation/join/listing is safe under concurrent requests.
 
 ## Phase 5 — Matchmaking and game tickets
-- [ ] Game instance registry.
-- [ ] Authenticated heartbeat.
-- [ ] Single-active-instance capacity policy.
+- [x] Game instance registry. *(Phase 2B minimal)*
+- [x] Authenticated heartbeat. *(Phase 2B)*
+- [x] Single-active-instance capacity policy. *(Phase 2B)*
 - [ ] Quick Match request lifecycle.
-- [ ] Atomic match allocation.
-- [ ] Ticket strategy decision and implementation.
-- [ ] Ticket validation endpoint for Dedicated Server.
+- [x] Atomic match allocation. *(Phase 2B via `POST /v1/games/assign`)*
+- [x] Ticket strategy decision and implementation. *(opaque + online validate)*
+- [x] Ticket validation endpoint for Dedicated Server.
 - [ ] Rejoin policy and endpoint.
-**Exit:** WPG client receives an assignment and Dedicated Server can validate admission.
+**Exit:** WPG client receives an assignment and Dedicated Server can validate admission. *(Phase 2B partial exit met; Quick Match / rejoin remain)*
 
 ## Phase 6 — Settlement and cloud progression
-- [ ] Server-authenticated settlement endpoint.
-- [ ] Match roster and metric validation.
-- [ ] Settlement idempotency.
+- [x] Server-authenticated settlement endpoint. *(Phase 2B minimal)*
+- [x] Match roster and metric validation. *(minimal roster check)*
+- [x] Settlement idempotency.
 - [ ] Match history.
-- [ ] Player aggregate stats.
+- [x] Player aggregate stats. *(minimal counters)*
 - [ ] Achievements.
 - [ ] Recently-played-with from verified matches.
 - [ ] Cloud progression read APIs.
-**Exit:** trusted game results persist exactly once.
+**Exit:** trusted game results persist exactly once. *(Phase 2B minimal settlement met; full progression remains)*
 
 ## Phase 7 — Production hardening
 - [ ] TLS ingress and deployment config.

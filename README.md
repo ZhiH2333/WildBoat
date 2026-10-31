@@ -12,7 +12,7 @@ Go backend for WPG Online 2.0 and the WPass identity/social platform.
 
 ## Status
 
-Phase 0/1 runtime foundation and **Phase 2 WPass identity** are implemented:
+Phase 0/1 runtime foundation, **Phase 2 WPass identity**, and **Phase 2B game ops** are implemented:
 
 - Modular monolith layout under `cmd/` and `internal/`
 - Config validation, structured JSON logging, request IDs
@@ -20,19 +20,22 @@ Phase 0/1 runtime foundation and **Phase 2 WPass identity** are implemented:
 - `/healthz` and `/readyz`
 - WPass registration, email verification tokens, login, JWT access tokens, rotating refresh sessions
 - Profile + session management APIs under `/v1`
+- Dedicated Server register/heartbeat, game assignment, opaque online game tickets, minimal settlement
 - Graceful shutdown, Dockerfile, Docker Compose
 - Unit tests and optional PostgreSQL integration tests
 
-Friends, Party, rooms, matchmaking, tickets, and progression are **not** implemented yet.
+Friends, Party, rooms, Quick Match queues, achievements, and full progression APIs are **not** implemented yet.
+
+Phase 2B contract for Agent B: `docs/phase-2b-api-contract.md`.
 
 ## Local development
 
 ```bash
-cp .env.example .env   # set TOKEN_SIGNING_KEY and POSTGRES_PASSWORD
+cp .env.example .env   # set TOKEN_SIGNING_KEY, DEDICATED_SERVER_CREDENTIAL, POSTGRES_PASSWORD
 make up                # build API + start PostgreSQL
-make smoke             # hit /healthz and /readyz
+make smoke             # hit /healthz, /readyz, and WPass auth smoke
 make test
-DATABASE_URL='postgres://wildboat:local-dev-only-change-me@localhost:5432/wildboat?sslmode=disable' go test ./...
+DATABASE_URL='postgres://wildboat:local-dev-only-change-me@localhost:5432/wildboat?sslmode=disable' go test ./... -count=1
 make down
 ```
 
@@ -42,9 +45,11 @@ With `EMAIL_MODE=dev` (development/test only), registration returns `dev_verific
 
 | Token | Lifetime (default) | Storage | Notes |
 |---|---|---|---|
-| Access JWT | 15m | Not stored | HS256, bearer auth |
+| Access JWT | 15m | Not stored | HS256, bearer auth for player APIs |
 | Refresh opaque | 720h | SHA-256 hash in `sessions` | Rotated on each refresh; revocable |
 | Email action | verify 24h / reset 1h | SHA-256 hash | Single-use |
+| Game ticket | 60s | SHA-256 hash in `game_tickets` | Opaque; DS online validate; one-time |
+| DS credential | long-lived | SHA-256 hash in `dedicated_servers` | Server-to-server only; never in clients |
 
 Logout / logout-all / delete-session set `revoked_at`. Refresh reuse outside a short grace window revokes all account sessions.
 

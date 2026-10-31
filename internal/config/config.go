@@ -22,17 +22,23 @@ type Config struct {
 	EmailMode       string
 	AuthRateLimit   int
 	AuthRateWindow  time.Duration
+
+	DedicatedServerCredential string
+	GameTicketTTL             time.Duration
+	DSHeartbeatTTL            time.Duration
+	GameInstanceCapacity      int
 }
 
 // Load reads configuration from environment variables and validates required fields.
 func Load() (Config, error) {
 	cfg := Config{
-		AppEnv:          strings.TrimSpace(firstNonEmpty(os.Getenv("APP_ENV"), "development")),
-		HTTPAddr:        strings.TrimSpace(firstNonEmpty(os.Getenv("HTTP_ADDR"), "0.0.0.0:8080")),
-		DatabaseURL:     strings.TrimSpace(os.Getenv("DATABASE_URL")),
-		LogLevel:        strings.ToLower(strings.TrimSpace(firstNonEmpty(os.Getenv("LOG_LEVEL"), "info"))),
-		EmailMode:       strings.ToLower(strings.TrimSpace(firstNonEmpty(os.Getenv("EMAIL_MODE"), "none"))),
-		TokenSigningKey: strings.TrimSpace(os.Getenv("TOKEN_SIGNING_KEY")),
+		AppEnv:                    strings.TrimSpace(firstNonEmpty(os.Getenv("APP_ENV"), "development")),
+		HTTPAddr:                  strings.TrimSpace(firstNonEmpty(os.Getenv("HTTP_ADDR"), "0.0.0.0:8080")),
+		DatabaseURL:               strings.TrimSpace(os.Getenv("DATABASE_URL")),
+		LogLevel:                  strings.ToLower(strings.TrimSpace(firstNonEmpty(os.Getenv("LOG_LEVEL"), "info"))),
+		EmailMode:                 strings.ToLower(strings.TrimSpace(firstNonEmpty(os.Getenv("EMAIL_MODE"), "none"))),
+		TokenSigningKey:           strings.TrimSpace(os.Getenv("TOKEN_SIGNING_KEY")),
+		DedicatedServerCredential: strings.TrimSpace(os.Getenv("DEDICATED_SERVER_CREDENTIAL")),
 	}
 
 	shutdownRaw := strings.TrimSpace(firstNonEmpty(os.Getenv("SHUTDOWN_TIMEOUT"), "10s"))
@@ -66,6 +72,24 @@ func Load() (Config, error) {
 	}
 	cfg.AuthRateWindow = rateWindow
 
+	ticketTTL, err := time.ParseDuration(strings.TrimSpace(firstNonEmpty(os.Getenv("GAME_TICKET_TTL"), "60s")))
+	if err != nil {
+		return Config{}, fmt.Errorf("invalid GAME_TICKET_TTL: %w", err)
+	}
+	cfg.GameTicketTTL = ticketTTL
+
+	heartbeatTTL, err := time.ParseDuration(strings.TrimSpace(firstNonEmpty(os.Getenv("DS_HEARTBEAT_TTL"), "30s")))
+	if err != nil {
+		return Config{}, fmt.Errorf("invalid DS_HEARTBEAT_TTL: %w", err)
+	}
+	cfg.DSHeartbeatTTL = heartbeatTTL
+
+	capacity, err := strconv.Atoi(strings.TrimSpace(firstNonEmpty(os.Getenv("GAME_INSTANCE_CAPACITY"), "4")))
+	if err != nil {
+		return Config{}, fmt.Errorf("invalid GAME_INSTANCE_CAPACITY: %w", err)
+	}
+	cfg.GameInstanceCapacity = capacity
+
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err
 	}
@@ -87,12 +111,18 @@ func (c Config) Validate() error {
 	if c.TokenSigningKey == "" {
 		missing = append(missing, "TOKEN_SIGNING_KEY")
 	}
+	if c.DedicatedServerCredential == "" {
+		missing = append(missing, "DEDICATED_SERVER_CREDENTIAL")
+	}
 	if len(missing) > 0 {
 		return fmt.Errorf("missing required config: %s", strings.Join(missing, ", "))
 	}
 
 	if len(c.TokenSigningKey) < 32 {
 		return fmt.Errorf("TOKEN_SIGNING_KEY must be at least 32 characters")
+	}
+	if len(c.DedicatedServerCredential) < 32 {
+		return fmt.Errorf("DEDICATED_SERVER_CREDENTIAL must be at least 32 characters")
 	}
 
 	switch c.LogLevel {
@@ -124,6 +154,15 @@ func (c Config) Validate() error {
 	}
 	if c.AuthRateWindow <= 0 {
 		return fmt.Errorf("AUTH_RATE_WINDOW must be greater than zero")
+	}
+	if c.GameTicketTTL <= 0 {
+		return fmt.Errorf("GAME_TICKET_TTL must be greater than zero")
+	}
+	if c.DSHeartbeatTTL <= 0 {
+		return fmt.Errorf("DS_HEARTBEAT_TTL must be greater than zero")
+	}
+	if c.GameInstanceCapacity < 1 || c.GameInstanceCapacity > 4 {
+		return fmt.Errorf("GAME_INSTANCE_CAPACITY must be between 1 and 4")
 	}
 
 	return nil

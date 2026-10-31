@@ -15,10 +15,13 @@ import (
 	"github.com/ZhiH2333/WildBoat/internal/httpapi"
 	"github.com/ZhiH2333/WildBoat/internal/httpapi/handlers"
 	"github.com/ZhiH2333/WildBoat/internal/identity"
+	"github.com/ZhiH2333/WildBoat/internal/match"
 	"github.com/ZhiH2333/WildBoat/internal/persistence"
 )
 
-func testAPI(t *testing.T) (http.Handler, *identity.Service) {
+const testDSCredential = "handlers-ds-credential-32bytes!!!"
+
+func testAPI(t *testing.T) (http.Handler, *identity.Service, *match.Service) {
 	t.Helper()
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
@@ -51,8 +54,19 @@ func testAPI(t *testing.T) (http.Handler, *identity.Service) {
 		AppEnv:     "test",
 	}, slog.Default())
 
-	router := httpapi.NewRouter(slog.Default(), handlers.Health{DB: db}, svc, nil)
-	return router, svc
+	matchSvc := match.NewService(match.NewStore(db.Pool), match.Config{
+		TicketTTL:        time.Minute,
+		HeartbeatTTL:     30 * time.Second,
+		DefaultCapacity:  4,
+		ServerCredential: testDSCredential,
+		ServerLabel:      "test",
+	}, slog.Default())
+	if err := matchSvc.EnsureBootstrapServer(ctx); err != nil {
+		t.Fatalf("EnsureBootstrapServer: %v", err)
+	}
+
+	router := httpapi.NewRouter(slog.Default(), handlers.Health{DB: db}, svc, matchSvc, nil)
+	return router, svc, matchSvc
 }
 
 func doJSON(t *testing.T, h http.Handler, method, path string, body any, token string) (int, map[string]any) {
@@ -83,7 +97,7 @@ func doJSON(t *testing.T, h http.Handler, method, path string, body any, token s
 }
 
 func TestAuthHTTPLifecycle(t *testing.T) {
-	h, _ := testAPI(t)
+	h, _, _ := testAPI(t)
 	email := "http-" + time.Now().UTC().Format("20060102150405.000000000") + "@example.com"
 
 	code, reg := doJSON(t, h, http.MethodPost, "/v1/auth/register", map[string]any{
@@ -155,7 +169,7 @@ func TestAuthHTTPLifecycle(t *testing.T) {
 }
 
 func TestAuthHTTPRejectsExpiredAccessToken(t *testing.T) {
-	h, svc := testAPI(t)
+	h, svc, _ := testAPI(t)
 	email := "exp-" + time.Now().UTC().Format("20060102150405.000000000") + "@example.com"
 
 	reg, err := svc.Register(context.Background(), identity.RegisterInput{
@@ -198,7 +212,7 @@ func TestAuthHTTPRejectsExpiredAccessToken(t *testing.T) {
 }
 
 func TestAuthHTTPUnauthorizedProfile(t *testing.T) {
-	h, _ := testAPI(t)
+	h, _, _ := testAPI(t)
 	code, body := doJSON(t, h, http.MethodGet, "/v1/me", nil, "")
 	if code != http.StatusUnauthorized {
 		t.Fatalf("status=%d body=%v", code, body)
