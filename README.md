@@ -2,7 +2,7 @@
 
 Go backend for WPG Online 2.0 and the WPass identity/social platform.
 
-## Toolchain pins (Phase 0/1)
+## Toolchain pins
 
 | Component | Version |
 |---|---|
@@ -12,33 +12,41 @@ Go backend for WPG Online 2.0 and the WPass identity/social platform.
 
 ## Status
 
-Phase 0 (repository bootstrap) and Phase 1 (runtime foundation) are implemented:
+Phase 0/1 runtime foundation and **Phase 2 WPass identity** are implemented:
 
 - Modular monolith layout under `cmd/` and `internal/`
 - Config validation, structured JSON logging, request IDs
 - PostgreSQL pool + embedded SQL migrations
 - `/healthz` and `/readyz`
-- Graceful shutdown
-- Dockerfile (multi-stage, non-root) + Docker Compose
-- Unit tests and optional PostgreSQL integration test
+- WPass registration, email verification tokens, login, JWT access tokens, rotating refresh sessions
+- Profile + session management APIs under `/v1`
+- Graceful shutdown, Dockerfile, Docker Compose
+- Unit tests and optional PostgreSQL integration tests
 
-Identity, social, matchmaking, and tickets are **not** implemented yet.
+Friends, Party, rooms, matchmaking, tickets, and progression are **not** implemented yet.
 
 ## Local development
 
 ```bash
-cp .env.example .env   # if needed
+cp .env.example .env   # set TOKEN_SIGNING_KEY and POSTGRES_PASSWORD
 make up                # build API + start PostgreSQL
 make smoke             # hit /healthz and /readyz
 make test
+DATABASE_URL='postgres://wildboat:local-dev-only-change-me@localhost:5432/wildboat?sslmode=disable' go test ./...
 make down
 ```
 
-Integration test against a reachable Postgres:
+With `EMAIL_MODE=dev` (development/test only), registration returns `dev_verification_token` so you can call `POST /v1/auth/email/verify` without a mail provider. This is intentionally not production verification.
 
-```bash
-DATABASE_URL='postgres://wildboat:local-dev-only-change-me@localhost:5432/wildboat?sslmode=disable' make test-integration
-```
+## Auth token lifecycle
+
+| Token | Lifetime (default) | Storage | Notes |
+|---|---|---|---|
+| Access JWT | 15m | Not stored | HS256, bearer auth |
+| Refresh opaque | 720h | SHA-256 hash in `sessions` | Rotated on each refresh; revocable |
+| Email action | verify 24h / reset 1h | SHA-256 hash | Single-use |
+
+Logout / logout-all / delete-session set `revoked_at`. Refresh reuse outside a short grace window revokes all account sessions.
 
 ## Read order
 

@@ -40,4 +40,28 @@ func TestMigrateAndPing(t *testing.T) {
 	if value != "phase1" {
 		t.Fatalf("schema_bootstrap = %q, want phase1", value)
 	}
+
+	err = db.Pool.QueryRow(ctx, `SELECT value FROM app_meta WHERE key = $1`, "schema_wpass_identity").Scan(&value)
+	if err != nil {
+		t.Fatalf("query schema_wpass_identity: %v", err)
+	}
+	if value != "phase2" {
+		t.Fatalf("schema_wpass_identity = %q, want phase2", value)
+	}
+
+	for _, table := range []string{"accounts", "players", "sessions", "email_action_tokens"} {
+		var exists bool
+		err = db.Pool.QueryRow(ctx, `
+			SELECT EXISTS (
+				SELECT 1 FROM information_schema.tables
+				WHERE table_schema = 'public' AND table_name = $1
+			)
+		`, table).Scan(&exists)
+		if err != nil {
+			t.Fatalf("table check %s: %v", table, err)
+		}
+		if !exists {
+			t.Fatalf("expected table %s to exist", table)
+		}
+	}
 }

@@ -12,6 +12,12 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       SHUTDOWN_TIMEOUT: ${SHUTDOWN_TIMEOUT:-10s}
       DATABASE_URL: postgres://${POSTGRES_USER:-wildboat}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-wildboat}?sslmode=disable
+      TOKEN_SIGNING_KEY: ${TOKEN_SIGNING_KEY:?set TOKEN_SIGNING_KEY}
+      ACCESS_TOKEN_TTL: ${ACCESS_TOKEN_TTL:-15m}
+      REFRESH_TOKEN_TTL: ${REFRESH_TOKEN_TTL:-720h}
+      EMAIL_MODE: ${EMAIL_MODE:-dev}
+      AUTH_RATE_LIMIT: ${AUTH_RATE_LIMIT:-30}
+      AUTH_RATE_WINDOW: ${AUTH_RATE_WINDOW:-1m}
     depends_on:
       db:
         condition: service_healthy
@@ -42,7 +48,9 @@ services:
       retries: 5
     networks:
       - wildboat-private
-    # Do not publish the database port in production.
+    # Localhost-only publish for host-side integration tests. Do not publish publicly in production.
+    ports:
+      - "127.0.0.1:5432:5432"
 
 volumes:
   postgres_data:

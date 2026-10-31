@@ -12,6 +12,8 @@ import (
 	"github.com/ZhiH2333/WildBoat/internal/config"
 	"github.com/ZhiH2333/WildBoat/internal/httpapi"
 	"github.com/ZhiH2333/WildBoat/internal/httpapi/handlers"
+	"github.com/ZhiH2333/WildBoat/internal/httpapi/middleware"
+	"github.com/ZhiH2333/WildBoat/internal/identity"
 	"github.com/ZhiH2333/WildBoat/internal/logging"
 	"github.com/ZhiH2333/WildBoat/internal/persistence"
 )
@@ -27,6 +29,7 @@ func main() {
 	logger.Info("starting",
 		"app_env", cfg.AppEnv,
 		"http_addr", cfg.HTTPAddr,
+		"email_mode", cfg.EmailMode,
 	)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -45,7 +48,26 @@ func main() {
 	}
 	defer db.Close()
 
-	router := httpapi.NewRouter(logger, handlers.Health{DB: db})
+	accessTokens, err := identity.NewAccessTokenManager(
+		[]byte(cfg.TokenSigningKey),
+		cfg.AccessTokenTTL,
+		"wildboat",
+	)
+	if err != nil {
+		logger.Error("access_token_manager_invalid", "error", err.Error())
+		os.Exit(1)
+	}
+
+	idStore := identity.NewStore(db.Pool)
+	idSvc := identity.NewService(idStore, accessTokens, identity.Config{
+		AccessTTL:  cfg.AccessTokenTTL,
+		RefreshTTL: cfg.RefreshTokenTTL,
+		EmailMode:  identity.EmailMode(cfg.EmailMode),
+		AppEnv:     cfg.AppEnv,
+	}, logger)
+
+	authLimiter := middleware.NewRateLimiter(cfg.AuthRateLimit, cfg.AuthRateWindow)
+	router := httpapi.NewRouter(logger, handlers.Health{DB: db}, idSvc, authLimiter)
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           router,

@@ -21,16 +21,20 @@
 **Exit:** reproducible Docker Compose environment and migration pipeline.
 
 ## Phase 2 — WPass identity
-- [ ] Account/player schema.
-- [ ] Registration and email verification token flow.
-- [ ] Password hashing.
-- [ ] Login and short-lived access token.
-- [ ] Refresh token rotation/revocation.
-- [ ] Logout/session listing/revocation.
-- [ ] Password recovery.
-- [ ] Profile APIs.
-- [ ] Rate limits and security audit events.
+- [x] Account/player schema.
+- [x] Registration and email verification token flow.
+- [x] Password hashing.
+- [x] Login and short-lived access token.
+- [x] Refresh token rotation/revocation.
+- [x] Logout/session listing/revocation.
+- [x] Password recovery.
+- [x] Profile APIs.
+- [x] Rate limits and security audit events.
 **Exit:** secure account lifecycle works end-to-end.
+
+Notes:
+- Production email provider is not wired; `EMAIL_MODE=dev` exposes single-use tokens in non-production only.
+- In-process auth rate limiting is present; ingress-level limiting remains a deployment requirement.
 
 ## Phase 3 — Social and Party
 - [ ] Friend request lifecycle.

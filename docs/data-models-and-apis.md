@@ -146,6 +146,8 @@ Schema refinements must add foreign keys, check constraints, indexes, and deleti
 ## 4. Public API
 
 ### Auth and profile
+All paths are under `/v1` (for example `POST /v1/auth/register`).
+
 - `POST /auth/register`
 - `POST /auth/login`
 - `POST /auth/refresh`
@@ -158,6 +160,19 @@ Schema refinements must add foreign keys, check constraints, indexes, and deleti
 - `PATCH /me/profile`
 - `GET /me/sessions`
 - `DELETE /me/sessions/{session_id}`
+
+#### Phase 2 identity contract notes (implemented)
+
+- Public IDs are UUID strings (no `acc_` / `plr_` prefix). Reason: opaque UUIDs already satisfy non-sequential identity without inventing a second encoding layer.
+- Table names follow this document (`accounts`, `players`, `sessions`, `email_action_tokens`), not alternate names such as `player_profiles` / `refresh_sessions`.
+- Registration does **not** issue session tokens. Login requires `status=active` after email verification (`ACCOUNT_NOT_VERIFIED` otherwise).
+- Access tokens are short-lived HS256 JWTs (`Authorization: Bearer …`). Refresh tokens are opaque secrets stored only as SHA-256 hashes, rotated on each refresh, and revocable.
+- Default TTLs: access `15m`, refresh `720h` (configurable).
+- Refresh reuse outside a short grace window revokes all sessions for the account.
+- Email provider is not configured for production yet. Responses include `email_delivery`:
+  - `not_configured` when `EMAIL_MODE=none` (tokens stored, nothing faked as sent)
+  - `dev_token_returned` when `EMAIL_MODE=dev` (non-production only; returns `dev_verification_token` / `dev_reset_token`)
+- Auth endpoints apply an in-process per-IP rate limit; production should also enforce ingress/WAF limits.
 
 ### Friends/social
 - `GET /friends`
@@ -223,12 +238,54 @@ Request:
 Response:
 ```json
 {
-  "account_id": "acc_opaque",
+  "account_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
   "player": {
-    "player_id": "plr_opaque",
-    "display_name": "Pilot"
+    "player_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+    "display_name": "Pilot",
+    "avatar_id": "default",
+    "bio": "",
+    "created_at": "2026-10-31T06:00:00Z",
+    "updated_at": "2026-10-31T06:00:00Z"
   },
-  "verification_required": true
+  "verification_required": true,
+  "email_delivery": "dev_token_returned",
+  "dev_verification_token": "<only when EMAIL_MODE=dev>"
+}
+```
+
+### Login
+Request:
+```json
+{
+  "email": "player@example.com",
+  "password": "<user-supplied-secret>"
+}
+```
+Response:
+```json
+{
+  "tokens": {
+    "access_token": "<jwt>",
+    "refresh_token": "<opaque>",
+    "token_type": "Bearer",
+    "access_expires_at": "2026-10-31T06:15:00Z",
+    "refresh_expires_at": "2026-11-30T06:00:00Z",
+    "session_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
+  },
+  "me": {
+    "account_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "email": "player@example.com",
+    "status": "active",
+    "email_verified": true,
+    "player": {
+      "player_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+      "display_name": "Pilot",
+      "avatar_id": "default",
+      "bio": "",
+      "created_at": "2026-10-31T06:00:00Z",
+      "updated_at": "2026-10-31T06:00:00Z"
+    }
+  }
 }
 ```
 
