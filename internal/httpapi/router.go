@@ -8,6 +8,7 @@ import (
 	"github.com/ZhiH2333/WildBoat/internal/httpapi/middleware"
 	"github.com/ZhiH2333/WildBoat/internal/identity"
 	"github.com/ZhiH2333/WildBoat/internal/match"
+	"github.com/ZhiH2333/WildBoat/internal/room"
 )
 
 // NewRouter wires public HTTP routes for the modular monolith API.
@@ -16,6 +17,7 @@ func NewRouter(
 	health handlers.Health,
 	idSvc *identity.Service,
 	matchSvc *match.Service,
+	roomSvc *room.Service,
 	authLimiter *middleware.RateLimiter,
 ) http.Handler {
 	mux := http.NewServeMux()
@@ -24,8 +26,11 @@ func NewRouter(
 
 	auth := handlers.Auth{Service: idSvc}
 	me := handlers.Me{Service: idSvc}
+	profile := handlers.Profile{Service: matchSvc}
 	games := handlers.Games{Service: matchSvc}
 	server := handlers.Server{Service: matchSvc}
+	rooms := handlers.Rooms{Service: roomSvc}
+	mm := handlers.Matchmaking{Service: roomSvc}
 	requireAuth := middleware.RequireAuth(idSvc)
 	requireServer := middleware.RequireServerAuth(matchSvc)
 
@@ -49,8 +54,22 @@ func NewRouter(
 	mux.Handle("PATCH /v1/me/profile", requireAuth(http.HandlerFunc(me.PatchProfile)))
 	mux.Handle("GET /v1/me/sessions", requireAuth(http.HandlerFunc(me.ListSessions)))
 	mux.Handle("DELETE /v1/me/sessions/{session_id}", requireAuth(http.HandlerFunc(me.DeleteSession)))
+	mux.Handle("GET /v1/me/stats", requireAuth(http.HandlerFunc(profile.Stats)))
+	mux.Handle("GET /v1/me/matches", requireAuth(http.HandlerFunc(profile.Matches)))
 
 	mux.Handle("POST /v1/games/assign", requireAuth(http.HandlerFunc(games.Assign)))
+
+	mux.Handle("POST /v1/rooms", requireAuth(limit(rooms.Create)))
+	mux.Handle("POST /v1/rooms/join-by-code", requireAuth(limit(rooms.JoinByCode)))
+	mux.Handle("GET /v1/rooms/current", requireAuth(http.HandlerFunc(rooms.Current)))
+	mux.Handle("GET /v1/rooms/{room_id}", requireAuth(http.HandlerFunc(rooms.Get)))
+	mux.Handle("POST /v1/rooms/{room_id}/leave", requireAuth(limit(rooms.Leave)))
+	mux.Handle("PUT /v1/rooms/{room_id}/ready", requireAuth(http.HandlerFunc(rooms.Ready)))
+	mux.Handle("POST /v1/rooms/{room_id}/start", requireAuth(limit(rooms.Start)))
+	mux.Handle("POST /v1/rooms/{room_id}/assignment", requireAuth(limit(rooms.Assignment)))
+
+	mux.Handle("POST /v1/matchmaking/quick", requireAuth(limit(mm.Quick)))
+	mux.Handle("POST /v1/matchmaking/cancel", requireAuth(limit(mm.Cancel)))
 
 	mux.Handle("POST /v1/server/instances/register", requireServer(http.HandlerFunc(server.RegisterInstance)))
 	mux.Handle("POST /v1/server/instances/{game_instance_id}/heartbeat", requireServer(http.HandlerFunc(server.Heartbeat)))

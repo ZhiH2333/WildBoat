@@ -1,13 +1,17 @@
 package handlers_test
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/ZhiH2333/WildBoat/internal/persistence"
 )
 
 func registerLogin(t *testing.T, h http.Handler, name string) (access string, playerID string) {
@@ -38,8 +42,32 @@ func registerLogin(t *testing.T, h http.Handler, name string) (access string, pl
 	return tokens["access_token"].(string), player["player_id"].(string)
 }
 
+func offlineAllGameInstances(t *testing.T) {
+	t.Helper()
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	db, err := persistence.Connect(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("connect for offline-all: %v", err)
+	}
+	defer db.Close()
+	if _, err := db.Pool.Exec(ctx, `
+		UPDATE game_instances
+		SET status = 'offline', updated_at = now()
+		WHERE status IN ('ready', 'full', 'starting', 'draining')
+	`); err != nil {
+		t.Fatalf("offline all instances: %v", err)
+	}
+}
+
 func registerReadyInstance(t *testing.T, h http.Handler, capacity int) string {
 	t.Helper()
+	// Isolate from a concurrent local Docker DS sharing DATABASE_URL.
+	offlineAllGameInstances(t)
 	code, reg := doJSON(t, h, http.MethodPost, "/v1/server/instances/register", map[string]any{
 		"host":             "127.0.0.1",
 		"port":             24567,
@@ -72,6 +100,7 @@ func forceNoAssignableInstance(t *testing.T, h http.Handler) {
 	if code != http.StatusOK {
 		t.Fatalf("offline heartbeat status=%d body=%v", code, body)
 	}
+	offlineAllGameInstances(t)
 }
 
 func TestAssignRequiresAuth(t *testing.T) {

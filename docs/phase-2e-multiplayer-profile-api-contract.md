@@ -864,4 +864,10 @@ If UI ships before room APIs land: only `POST /v1/games/assign` works (Phase 2D 
 | Supersedes | Nothing (additive) |
 | Depends on | `docs/phase-2b-api-contract.md` |
 | Next phase | Implement migrations + room/matchmaking/profile-read APIs behind this freeze |
-)
+
+### Implementation note (Phase 2E.1)
+
+Frozen request/response fields and semantics in this document are unchanged.  
+Agent A implementation details, smoke steps, and residual limits live in:
+
+`docs/phase-2e-multiplayer-profile-api-implementation.md`

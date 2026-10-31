@@ -16,4 +16,5 @@ var (
 	ErrTicketReplayed        = errors.New("ticket replayed")
 	ErrTicketRevoked         = errors.New("ticket revoked")
 	ErrMatchNotSettleable    = errors.New("match not settleable")
+	ErrMatchAlreadyActive    = errors.New("match already active")
 )

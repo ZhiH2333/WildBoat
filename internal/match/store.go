@@ -134,6 +134,9 @@ func (s *Store) RegisterInstance(ctx context.Context, serverID uuid.UUID, in Reg
 	if err != nil {
 		return GameInstance{}, fmt.Errorf("abort open matches on register: %w", err)
 	}
+	if err := s.AbortRoomsForServerTx(ctx, tx, serverID, now); err != nil {
+		return GameInstance{}, err
+	}
 
 	capacity := in.Capacity
 	if capacity <= 0 {
@@ -805,6 +808,10 @@ func (s *Store) ProcessSettlement(
 			return false, ErrMatchNotSettleable
 		}
 		return false, fmt.Errorf("insert settlement: %w", err)
+	}
+
+	if err := s.CloseRoomsForMatchTx(ctx, tx, matchID, now); err != nil {
+		return false, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {

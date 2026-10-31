@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -17,6 +18,7 @@ import (
 	"github.com/ZhiH2333/WildBoat/internal/logging"
 	"github.com/ZhiH2333/WildBoat/internal/match"
 	"github.com/ZhiH2333/WildBoat/internal/persistence"
+	"github.com/ZhiH2333/WildBoat/internal/room"
 )
 
 func main() {
@@ -81,8 +83,16 @@ func main() {
 	}
 	logger.Info("dedicated_server_credential_ready")
 
+	roomStore := room.NewStore(db.Pool)
+	roomSvc := room.NewService(roomStore, matchStore, room.Config{
+		IdleTTL:      30 * time.Minute,
+		TicketTTL:    cfg.GameTicketTTL,
+		HeartbeatTTL: cfg.DSHeartbeatTTL,
+	}, logger)
+	go runRoomExpirySweeper(ctx, roomSvc, logger)
+
 	authLimiter := middleware.NewRateLimiter(cfg.AuthRateLimit, cfg.AuthRateWindow)
-	router := httpapi.NewRouter(logger, handlers.Health{DB: db}, idSvc, matchSvc, authLimiter)
+	router := httpapi.NewRouter(logger, handlers.Health{DB: db}, idSvc, matchSvc, roomSvc, authLimiter)
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           router,
@@ -118,4 +128,21 @@ func main() {
 		os.Exit(1)
 	}
 	logger.Info("shutdown_complete")
+}
+
+func runRoomExpirySweeper(ctx context.Context, roomSvc *room.Service, logger *slog.Logger) {
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			sweepCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+			if _, err := roomSvc.SweepExpired(sweepCtx); err != nil {
+				logger.Error("room_expiry_sweep_failed", "error", err.Error())
+			}
+			cancel()
+		}
+	}
 }

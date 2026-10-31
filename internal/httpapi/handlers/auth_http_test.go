@@ -17,6 +17,7 @@ import (
 	"github.com/ZhiH2333/WildBoat/internal/identity"
 	"github.com/ZhiH2333/WildBoat/internal/match"
 	"github.com/ZhiH2333/WildBoat/internal/persistence"
+	"github.com/ZhiH2333/WildBoat/internal/room"
 )
 
 const testDSCredential = "handlers-ds-credential-32bytes!!!"
@@ -54,7 +55,8 @@ func testAPI(t *testing.T) (http.Handler, *identity.Service, *match.Service) {
 		AppEnv:     "test",
 	}, slog.Default())
 
-	matchSvc := match.NewService(match.NewStore(db.Pool), match.Config{
+	matchStore := match.NewStore(db.Pool)
+	matchSvc := match.NewService(matchStore, match.Config{
 		TicketTTL:        time.Minute,
 		HeartbeatTTL:     30 * time.Second,
 		DefaultCapacity:  4,
@@ -64,8 +66,13 @@ func testAPI(t *testing.T) (http.Handler, *identity.Service, *match.Service) {
 	if err := matchSvc.EnsureBootstrapServer(ctx); err != nil {
 		t.Fatalf("EnsureBootstrapServer: %v", err)
 	}
+	roomSvc := room.NewService(room.NewStore(db.Pool), matchStore, room.Config{
+		IdleTTL:      30 * time.Minute,
+		TicketTTL:    time.Minute,
+		HeartbeatTTL: 30 * time.Second,
+	}, slog.Default())
 
-	router := httpapi.NewRouter(slog.Default(), handlers.Health{DB: db}, svc, matchSvc, nil)
+	router := httpapi.NewRouter(slog.Default(), handlers.Health{DB: db}, svc, matchSvc, roomSvc, nil)
 	return router, svc, matchSvc
 }
 
