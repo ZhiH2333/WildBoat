@@ -1,0 +1,31 @@
+# Binaries
+/bin/
+/dist/
+/out/
+*.exe
+*.test
+*.out
+wildboat
+
+# Dependencies / local tooling
+/vendor/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Coverage / test artifacts
+coverage.out
+coverage.html
+*.coverprofile
+
+# Temporary
+tmp/
+.tmp/

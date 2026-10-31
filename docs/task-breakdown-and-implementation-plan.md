@@ -1,23 +1,23 @@
 # WildBoat — Task Breakdown / Implementation Plan
 
 ## Phase 0 — Repository bootstrap
-- [ ] Create the separate `WildBoat` Git repository.
-- [ ] Add this documentation package.
-- [ ] Choose/pin Go and PostgreSQL versions.
-- [ ] Initialize Go module and standard layout.
-- [ ] Add formatting, test, vet, and lint workflow.
-- [ ] Add `.gitignore`, `.dockerignore`, `.env.example`.
-- [ ] Add Dockerfile and Compose skeleton.
+- [x] Create the separate `WildBoat` Git repository.
+- [x] Add this documentation package.
+- [x] Choose/pin Go and PostgreSQL versions.
+- [x] Initialize Go module and standard layout.
+- [x] Add formatting, test, vet, and lint workflow.
+- [x] Add `.gitignore`, `.dockerignore`, `.env.example`.
+- [x] Add Dockerfile and Compose skeleton.
 **Exit:** clean bootstrap builds and starts a minimal API + PostgreSQL locally.
 
 ## Phase 1 — Runtime foundation
-- [ ] Configuration loader with validation.
-- [ ] Structured logging and request ID.
-- [ ] `/healthz` and `/readyz`.
-- [ ] PostgreSQL connection pool and migrations.
-- [ ] Graceful shutdown.
-- [ ] Docker health checks and non-root API runtime.
-- [ ] Integration test harness using PostgreSQL.
+- [x] Configuration loader with validation.
+- [x] Structured logging and request ID.
+- [x] `/healthz` and `/readyz`.
+- [x] PostgreSQL connection pool and migrations.
+- [x] Graceful shutdown.
+- [x] Docker health checks and non-root API runtime.
+- [x] Integration test harness using PostgreSQL.
 **Exit:** reproducible Docker Compose environment and migration pipeline.
 
 ## Phase 2 — WPass identity

@@ -9,6 +9,8 @@ services:
     environment:
       APP_ENV: ${APP_ENV:-development}
       HTTP_ADDR: 0.0.0.0:8080
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      SHUTDOWN_TIMEOUT: ${SHUTDOWN_TIMEOUT:-10s}
       DATABASE_URL: postgres://${POSTGRES_USER:-wildboat}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-wildboat}?sslmode=disable
     depends_on:
       db:
@@ -20,12 +22,12 @@ services:
       interval: 15s
       timeout: 3s
       retries: 5
-      start_period: 10s
+      start_period: 15s
     networks:
       - wildboat-private
 
   db:
-    image: postgres:17
+    image: postgres:17.6-alpine
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-wildboat}

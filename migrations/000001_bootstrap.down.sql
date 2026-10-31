@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS app_meta;
+DROP EXTENSION IF EXISTS pgcrypto;

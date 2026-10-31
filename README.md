@@ -1,12 +1,44 @@
-# WildBoat — Backend Agent Handoff
+# WildBoat
 
-**WildBoat** is the planned Go backend repository for WPG Online 2.0 and the WPass identity/social platform.
+Go backend for WPG Online 2.0 and the WPass identity/social platform.
 
-- Repository status: **not yet created** (this package is a bootstrap specification).
-- Product client repository: https://github.com/ZhiH2333/WPG
-- Suggested language/runtime: Go (select a currently supported stable release when bootstrapping).
-- Database: PostgreSQL.
-- Server-side deployment: Docker / Docker Compose for initial deployment.
+## Toolchain pins (Phase 0/1)
+
+| Component | Version |
+|---|---|
+| Go | 1.26.x |
+| PostgreSQL | 17.6 (Compose image `postgres:17.6-alpine`) |
+| Alpine runtime | 3.22 |
+
+## Status
+
+Phase 0 (repository bootstrap) and Phase 1 (runtime foundation) are implemented:
+
+- Modular monolith layout under `cmd/` and `internal/`
+- Config validation, structured JSON logging, request IDs
+- PostgreSQL pool + embedded SQL migrations
+- `/healthz` and `/readyz`
+- Graceful shutdown
+- Dockerfile (multi-stage, non-root) + Docker Compose
+- Unit tests and optional PostgreSQL integration test
+
+Identity, social, matchmaking, and tickets are **not** implemented yet.
+
+## Local development
+
+```bash
+cp .env.example .env   # if needed
+make up                # build API + start PostgreSQL
+make smoke             # hit /healthz and /readyz
+make test
+make down
+```
+
+Integration test against a reachable Postgres:
+
+```bash
+DATABASE_URL='postgres://wildboat:local-dev-only-change-me@localhost:5432/wildboat?sslmode=disable' make test-integration
+```
 
 ## Read order
 
@@ -17,16 +49,8 @@
 5. `docs/coding-standards-and-guidelines.md`
 6. `docs/task-breakdown-and-implementation-plan.md`
 
-## Bootstrap warning
-
-This is a design specification, not an existing service. Do not claim endpoints, migrations, containers, or deployment already exist. Initialize the repository deliberately, choose and pin dependency versions, and record those decisions.
-
-## Core ownership
+## Ownership
 
 WildBoat owns accounts, identity, social graph, Party, room metadata, matchmaking allocation, tickets, cloud progression, match history, and persistence.
 
-WildBoat does **not** simulate combat. The Godot Headless Dedicated Server is authoritative for live game state and submits authenticated match settlements.
-
-## Initial capacity constraint
-
-The first deployment has one active Dedicated Server game instance. WildBoat must prevent concurrent allocation beyond that capacity or implement a queue. Multi-instance orchestration is a later milestone.
+WildBoat does **not** simulate combat. The Godot Headless Dedicated Server remains authoritative for live game state.
